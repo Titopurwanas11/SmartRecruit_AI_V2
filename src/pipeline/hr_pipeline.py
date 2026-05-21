@@ -10,15 +10,15 @@ logger = logging.getLogger(__name__)
 
 def run_hr_pipeline(
     raw_job_description: str,
-    resumes: list[tuple[str, str]]
+    resumes: list[tuple[str, str, str]]
 ) -> list[dict]:
     """
     Input:
         raw_job_description: uncleaned job description string from HR input
-        resumes: list of (candidate_name: str, raw_resume_text: str)
+        resumes: list of (candidate_filename: str, owner_name: str, raw_resume_text: str)
     Output:
         list of dicts sorted by score descending:
-        [{"rank": int, "candidate": str, "score": float}, ...]
+        [{"rank": int, "candidate": str, "owner_name": str, "score": float}, ...]
         Empty list if resumes is empty.
     """
     if not resumes:
@@ -30,11 +30,11 @@ def run_hr_pipeline(
     jd_embedding = model.encode([cleaned_jd])[0].reshape(1, -1)  # (1, 384)
 
     results = []
-    for name, raw_text in resumes:
+    for filename, owner_name, raw_text in resumes:
         cleaned = clean_text(raw_text)
         resume_embedding = model.encode([cleaned])[0].reshape(1, -1)  # (1, 384)
         score = float(cosine_similarity(jd_embedding, resume_embedding)[0][0])
-        results.append({"candidate": name, "score": round(score, 2)})
+        results.append({"candidate": filename, "owner_name": owner_name, "score": round(score, 2)})
 
     results.sort(key=lambda x: x["score"], reverse=True)
 

@@ -10,7 +10,7 @@ import os
 MAX_JOB_SAMPLE = 20000
 RANDOM_SEED = 42
 SBERT_MODEL_NAME = "all-MiniLM-L6-v2"
-INPUT_FILE = "job_descriptions.csv"
+INPUT_FILE = "data/raw/job_descriptions.csv"
 OUTPUT_EMBEDDINGS = "job_embeddings.npy"
 OUTPUT_METADATA = "job_metadata.pkl"
 

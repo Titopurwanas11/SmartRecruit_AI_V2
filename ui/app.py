@@ -80,7 +80,7 @@ with tab3:
             st.info("Upload at least one resume PDF (or a ZIP) to start ranking.")
         else:
             from src.pipeline.hr_pipeline import run_hr_pipeline
-            from src.utils.resume_loader import extract_text_from_pdf, extract_resumes_from_zip
+            from src.utils.resume_loader import extract_text_from_pdf, extract_resumes_from_zip, extract_owner_name
             import pandas as pd
 
             resumes = []
@@ -90,8 +90,9 @@ with tab3:
                     resumes.extend(extract_resumes_from_zip(raw))
                 else:
                     pdf_text = extract_text_from_pdf(raw, f.name)
-                    candidate_name = f.name.rsplit(".", 1)[0]
-                    resumes.append((candidate_name, pdf_text))
+                    candidate_filename = f.name.rsplit(".", 1)[0]
+                    owner_name = extract_owner_name(pdf_text)
+                    resumes.append((candidate_filename, owner_name, pdf_text))
 
             if not resumes:
                 st.error("No readable PDFs found in the uploaded files.")
@@ -100,8 +101,8 @@ with tab3:
                     hr_results = run_hr_pipeline(jd_input, resumes)
 
                 st.success(f"Ranked {len(hr_results)} candidate(s)")
-                df = pd.DataFrame(hr_results)[["rank", "candidate", "score"]]
-                df.columns = ["Rank", "Candidate", "Similarity Score"]
+                df = pd.DataFrame(hr_results)[["rank", "candidate", "owner_name", "score"]]
+                df.columns = ["Rank", "Candidate File", "Owner Name", "Similarity Score"]
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
                 st.caption("Score ranges from 0.0 (no match) to 1.0 (perfect match). Recommended threshold: ≥ 0.50")
