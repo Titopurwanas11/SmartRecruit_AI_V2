@@ -2,6 +2,7 @@ import streamlit as st
 import fitz  # PyMuPDF
 import sys
 import os
+import pandas as pd
 
 # Ensure project root is in sys.path for internal imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -100,14 +101,85 @@ with tab3:
                 with st.spinner(f"Scoring {len(resumes)} candidate(s)..."):
                     hr_results = run_hr_pipeline(jd_input, resumes)
 
-                st.success(f"Ranked {len(hr_results)} candidate(s)")
-                df = pd.DataFrame(hr_results)[["rank", "candidate", "owner_name", "score"]]
-                df.columns = ["Rank", "Candidate File", "Owner Name", "Similarity Score"]
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.session_state["hr_results"] = hr_results
+                st.session_state["hr_resumes"] = resumes
+                st.session_state["interview_questions"] = None
 
-                st.caption("Score ranges from 0.0 (no match) to 1.0 (perfect match). Recommended threshold: ≥ 0.50")
+    if st.session_state.get("hr_results"):
+        hr_results = st.session_state["hr_results"]
+        resumes = st.session_state["hr_resumes"]
 
-# 5. Pipeline Integration
+        st.success(f"Ranked {len(hr_results)} candidate(s)")
+        df = pd.DataFrame(hr_results)[["rank", "candidate", "owner_name", "score"]]
+        df.columns = ["Rank", "Candidate File", "Owner Name", "Similarity Score"]
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+        if hr_results:
+            candidate_choices = [
+                f"{r['rank']}. {r['candidate']} ({r['owner_name']})"
+                for r in hr_results
+            ]
+            selected_index = st.selectbox(
+                "Select candidate for interview questions",
+                options=list(range(len(candidate_choices))),
+                format_func=lambda i: candidate_choices[i],
+                key="selected_candidate_index",
+            )
+
+            with st.expander("Interview Question Generator"):
+                st.write(
+                    "Generate personalized technical and behavioral questions for the selected candidate "
+                    "based on the job description, skill gaps, and resume content."
+                )
+
+                if st.button("Generate Interview Questions", key="generate_interview_questions_btn"):
+                    from src.llm.interview_question_generator import generate_interview_questions
+                    from src.nlp.skill_extraction import load_skill_list, extract_skills
+                    from src.preprocessing.clean_text import clean_text
+                    import config
+
+                    selected_candidate = hr_results[selected_index]
+                    selected_resume = next(
+                        (
+                            raw_text
+                            for file_name, _, raw_text in resumes
+                            if file_name == selected_candidate["candidate"]
+                        ),
+                        ""
+                    )
+
+                    if not selected_resume:
+                        st.error("Unable to load the selected candidate's resume text.")
+                    else:
+                        cleaned_resume = clean_text(selected_resume)
+                        cleaned_jd = clean_text(jd_input)
+                        skill_list = load_skill_list(config.SKILL_LIST_PATH)
+                        resume_skills = extract_skills(cleaned_resume, skill_list)
+                        jd_skills = extract_skills(cleaned_jd, skill_list)
+
+                        matched_skills = sorted(set(resume_skills).intersection(jd_skills))
+                        missing_skills = sorted(set(jd_skills).difference(resume_skills))
+                        target_role = "Target role from the job description"
+
+                        st.session_state["interview_questions"] = None
+                        try:
+                            with st.spinner("Generating interview questions..."):
+                                st.session_state["interview_questions"] = generate_interview_questions(
+                                    target_role=target_role,
+                                    job_description=jd_input,
+                                    matched_skills=matched_skills,
+                                    missing_skills=missing_skills,
+                                    resume_text=selected_resume,
+                                )
+                        except RuntimeError as e:
+                            st.error(str(e))
+
+                if st.session_state.get("interview_questions"):
+                    st.subheader("Generated Interview Questions")
+                    st.markdown(st.session_state["interview_questions"])
+
+        st.caption("Score ranges from 0.0 (no match) to 1.0 (perfect match). Recommended threshold: ≥ 0.50")
+
 if resume_text:
     try:
         with st.spinner("Analyzing your resume..."):
