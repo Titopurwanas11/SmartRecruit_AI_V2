@@ -6,6 +6,7 @@ import config
 
 logger = logging.getLogger(__name__)
 
+
 def load_sbert_model() -> SentenceTransformer:
     """
     Input:  None — uses SBERT_MODEL_NAME from config.py ("all-MiniLM-L6-v2")
@@ -14,8 +15,17 @@ def load_sbert_model() -> SentenceTransformer:
     """
     model_name = config.SBERT_MODEL_NAME
     logger.info(f"Loading SBERT model: {model_name}")
-    model = SentenceTransformer(model_name)
-    return model
+
+    try:
+        model = SentenceTransformer(model_name, device="cpu")
+        logger.info("SBERT model loaded on CPU")
+        return model
+    except Exception as exc:
+        logger.warning(f"CPU load failed for SBERT model: {exc}")
+        model = SentenceTransformer(model_name)
+        logger.info("SBERT model loaded with default device fallback")
+        return model
+
 
 def embed_text(text: str, model: SentenceTransformer) -> np.ndarray:
     """

@@ -1,9 +1,9 @@
 import logging
-import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.preprocessing.clean_text import clean_text
 from src.matching.embeddings import load_sbert_model
+from src.utils.resume_loader import extract_contact_info
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def run_hr_pipeline(
         resumes: list of (candidate_filename: str, owner_name: str, raw_resume_text: str)
     Output:
         list of dicts sorted by score descending:
-        [{"rank": int, "candidate": str, "owner_name": str, "score": float}, ...]
+        [{"rank": int, "candidate": str, "owner_name": str, "score": float, "contact": str}, ...]
         Empty list if resumes is empty.
     """
     if not resumes:
@@ -27,14 +27,24 @@ def run_hr_pipeline(
     model = load_sbert_model()
 
     cleaned_jd = clean_text(raw_job_description)
-    jd_embedding = model.encode([cleaned_jd])[0].reshape(1, -1)  # (1, 384)
+    jd_embedding = model.encode([cleaned_jd])[0].reshape(1, -1)
 
     results = []
     for filename, owner_name, raw_text in resumes:
         cleaned = clean_text(raw_text)
-        resume_embedding = model.encode([cleaned])[0].reshape(1, -1)  # (1, 384)
+        resume_embedding = model.encode([cleaned])[0].reshape(1, -1)
         score = float(cosine_similarity(jd_embedding, resume_embedding)[0][0])
-        results.append({"candidate": filename, "owner_name": owner_name, "score": round(score, 2)})
+
+        contact_info = extract_contact_info(raw_text)
+
+        results.append(
+            {
+                "candidate": filename,
+                "owner_name": owner_name,
+                "score": round(score, 2),
+                "contact": contact_info,
+            }
+        )
 
     results.sort(key=lambda x: x["score"], reverse=True)
 

@@ -34,7 +34,7 @@ def clean_text(text: str) -> str:
     tokens = word_tokenize(text)
     
     # Remove stopwords
-    stop_words = set(stopwords.words('english'))
+    stop_words = set(stopwords.words('english')).union(set(stopwords.words('indonesian')))
     filtered_tokens = [w for w in tokens if w not in stop_words]
     
     # Rejoin

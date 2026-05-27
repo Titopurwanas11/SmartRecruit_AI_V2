@@ -15,11 +15,16 @@ Rules:
   - the question text
   - the purpose of the question
   - the expected insight the interviewer should look for
+  - a scoring rubric (Poor, Good, Excellent)
 - Keep the output plain markdown with this exact structure:
 
 [Question]
-Purpose:
-Expected Insight:
+**Purpose**: [brief purpose]
+**Expected Insight**: [expected insight]
+**Rubric**:
+- *Poor*: [indicator of a poor answer]
+- *Good*: [indicator of a good answer]
+- *Excellent*: [indicator of an excellent answer]
 
 - Do not add any extra sections, analysis, or narrative.
 - Do not number the questions in the response.
@@ -28,8 +33,8 @@ Expected Insight:
 -- Brevity rules:
  - Be concise. Each question text should be no longer than 20 words.
  - Keep `Purpose:` to 15 words or less and `Expected Insight:` to 20 words or less.
+ - Keep the rubric items brief (10-15 words each).
  - Prefer short phrases and action-oriented language; avoid lengthy examples.
- - Keep the total response under 200 words.
 """
 
 
@@ -155,35 +160,55 @@ def _local_generate_questions(
     parts = []
     parts.append("### Technical Question 1")
     parts.append(f"Question: {q(f'Describe a recent production issue you fixed and your steps.')}")
-    parts.append("Purpose: Assess debugging and verification approach.")
-    parts.append("Expected Insight: Clear reproduce→isolate→fix→test steps.")
+    parts.append("**Purpose**: Assess debugging and verification approach.")
+    parts.append("**Expected Insight**: Clear reproduce→isolate→fix→test steps.")
+    parts.append("**Rubric**:")
+    parts.append("- *Poor*: Random guessing, no verification.")
+    parts.append("- *Good*: Systematic isolation and fix.")
+    parts.append("- *Excellent*: Root cause analysis and added automated tests.")
 
     parts.append("\n### Technical Question 2")
     parts.append(
         f"Question: {q('Given slow ETL, what three prioritized fixes would you try?')}"
     )
-    parts.append("Purpose: Evaluate performance triage and pragmatic fixes.")
-    parts.append("Expected Insight: Measurement-first, bottleneck ID, practical mitigations.")
+    parts.append("**Purpose**: Evaluate performance triage and pragmatic fixes.")
+    parts.append("**Expected Insight**: Measurement-first, bottleneck ID, practical mitigations.")
+    parts.append("**Rubric**:")
+    parts.append("- *Poor*: Suggests complete rewrite without metrics.")
+    parts.append("- *Good*: Identifies bottlenecks and scales up resources.")
+    parts.append("- *Excellent*: Analyzes query plans, optimizes indexes, and partitions data.")
 
     parts.append("\n### Technical Question 3")
     parts.append(
         f"Question: {q('How would you deduplicate high-volume streaming data with limited memory?')}"
     )
-    parts.append("Purpose: Test production trade-offs and reliability.")
-    parts.append("Expected Insight: Windowed/stateful dedupe, TTL or external store options.")
+    parts.append("**Purpose**: Test production trade-offs and reliability.")
+    parts.append("**Expected Insight**: Windowed/stateful dedupe, TTL or external store options.")
+    parts.append("**Rubric**:")
+    parts.append("- *Poor*: In-memory hash set without bounds.")
+    parts.append("- *Good*: Uses an external key-value store (e.g. Redis).")
+    parts.append("- *Excellent*: Bloom filters or time-windowed state stores.")
 
     parts.append("\n### Behavioral Question 1")
     parts.append(
         f"Question: {q('Tell me about a time you disagreed with a team decision and what you did.') }"
     )
-    parts.append("Purpose: Assess communication and constructive conflict handling.")
-    parts.append("Expected Insight: Evidence-based feedback, compromise, and lessons learned.")
+    parts.append("**Purpose**: Assess communication and constructive conflict handling.")
+    parts.append("**Expected Insight**: Evidence-based feedback, compromise, and lessons learned.")
+    parts.append("**Rubric**:")
+    parts.append("- *Poor*: Ignored decision or complained without solutions.")
+    parts.append("- *Good*: Shared concerns, committed to the final decision.")
+    parts.append("- *Excellent*: Proposed data-driven alternatives and fostered team alignment.")
 
     parts.append("\n### Behavioral Question 2")
     parts.append(
         f"Question: {q('Describe when you learned a new tool quickly and applied it to deliver results.') }"
     )
-    parts.append("Purpose: Gauge learning agility and fast application.")
-    parts.append("Expected Insight: Rapid learning steps, prototypes, measurable impact.")
+    parts.append("**Purpose**: Gauge learning agility and fast application.")
+    parts.append("**Expected Insight**: Rapid learning steps, prototypes, measurable impact.")
+    parts.append("**Rubric**:")
+    parts.append("- *Poor*: Struggles to articulate learning method.")
+    parts.append("- *Good*: Read docs, built a basic prototype.")
+    parts.append("- *Excellent*: Built prototype, integrated it, and shared knowledge with the team.")
 
     return "\n".join(parts)

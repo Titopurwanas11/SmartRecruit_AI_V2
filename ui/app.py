@@ -81,7 +81,7 @@ with tab3:
             st.info("Upload at least one resume PDF (or a ZIP) to start ranking.")
         else:
             from src.pipeline.hr_pipeline import run_hr_pipeline
-            from src.utils.resume_loader import extract_text_from_pdf, extract_resumes_from_zip, extract_owner_name
+            from src.utils.resume_loader import extract_text_from_pdf, extract_resumes_from_zip, extract_owner_name_from_pdf
             import pandas as pd
 
             resumes = []
@@ -92,7 +92,7 @@ with tab3:
                 else:
                     pdf_text = extract_text_from_pdf(raw, f.name)
                     candidate_filename = f.name.rsplit(".", 1)[0]
-                    owner_name = extract_owner_name(pdf_text)
+                    owner_name = extract_owner_name_from_pdf(raw, f.name)
                     resumes.append((candidate_filename, owner_name, pdf_text))
 
             if not resumes:
@@ -110,8 +110,8 @@ with tab3:
         resumes = st.session_state["hr_resumes"]
 
         st.success(f"Ranked {len(hr_results)} candidate(s)")
-        df = pd.DataFrame(hr_results)[["rank", "candidate", "owner_name", "score"]]
-        df.columns = ["Rank", "Candidate File", "Owner Name", "Similarity Score"]
+        df = pd.DataFrame(hr_results)[["rank", "candidate", "owner_name", "score", "contact"]]
+        df.columns = ["Rank", "Candidate File", "Owner Name", "Similarity Score", "Contact"]
         st.dataframe(df, use_container_width=True, hide_index=True)
 
         if hr_results:
@@ -129,7 +129,7 @@ with tab3:
             with st.expander("Interview Question Generator"):
                 st.write(
                     "Generate personalized technical and behavioral questions for the selected candidate "
-                    "based on the job description, skill gaps, and resume content."
+                    "based on the job description and resume content."
                 )
 
                 if st.button("Generate Interview Questions", key="generate_interview_questions_btn"):
@@ -178,67 +178,71 @@ with tab3:
                     st.subheader("Generated Interview Questions")
                     st.markdown(st.session_state["interview_questions"])
 
-        st.caption("Score ranges from 0.0 (no match) to 1.0 (perfect match). Recommended threshold: ≥ 0.50")
+            # Candidate Comparison Radar Chart
+            with st.expander("Compare Candidates (Radar Chart)"):
+                st.write("Visualize top candidates across selected skill dimensions.")
 
-if resume_text:
-    try:
-        with st.spinner("Analyzing your resume..."):
-            results = run_pipeline(resume_text)
-
-        # 6. Results Display
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("Predicted Role")
-            st.success(results["predicted_role"])
-
-            st.subheader("Your Skills")
-            st.write(", ".join(results["extracted_skills"]) or "No skills detected")
-
-        with col2:
-            st.subheader("Skill Gap (vs. Top Match)")
-            if results["top_matches"]:
-                matched = ", ".join(results["skill_gap"]["matched_skills"]) or "None"
-                missing = ", ".join(results["skill_gap"]["missing_skills"]) or "None"
-                st.markdown(f"**Matched:** {matched}")
-                st.markdown(f"**Missing:** {missing}")
-            else:
-                st.info("No sufficiently similar jobs found to compute skill gap.")
-
-        st.subheader("Top Job Matches")
-        if results["top_matches"]:
-            for i, match in enumerate(results["top_matches"]):
-                with st.expander(f"{i+1}. {match['title']} at {match['company']} (Score: {match['score']:.2f})"):
-                    st.write(f"**Required Skills:** {', '.join(match['required_skills'])}")
-        else:
-            st.warning("No job matches found above the similarity threshold (0.50). Try a more detailed resume.")
-
-        # 7. AI Advisor — on-demand only
-        if results["top_matches"]:
-            st.divider()
-            st.subheader("AI Resume Advisor")
-            st.caption("Get specific suggestions from Gemini on how to improve your resume for your top match.")
-
-            if st.button("Get AI Suggestions", key="ai_advisor_btn"):
-                st.session_state["ai_advice"] = None
-                from src.llm.gemini_advisor import generate_resume_advice
-                try:
-                    with st.spinner("Asking Gemini for advice..."):
-                        advice = generate_resume_advice(
-                            resume_text,
-                            results["top_matches"][0],
-                            results["skill_gap"],
+                if len(hr_results) < 2:
+                    st.info("Need at least 2 ranked candidates to compare. Upload more resumes and re-run ranking.")
+                else:
+                    try:
+                        from src.visualization.radar import (
+                            extract_dimensions_from_jd,
+                            build_radar_dataframe,
+                            plotly_radar_chart,
                         )
-                    st.session_state["ai_advice"] = advice
-                except RuntimeError as e:
-                    st.error(str(e))
+                        from src.matching.embeddings import load_sbert_model
+                    except Exception as e:
+                        st.error(f"Radar chart import error: {e}")
+                        st.warning('Install required packages: pip install plotly')
+                    else:
+                        # Candidate selection dropdown
+                        # Use real name for label, fallback to filename if needed
+                        candidate_options = [f"{r['rank']}. {r['owner_name'] if r['owner_name'] != 'Unknown' else r['candidate']}" for r in hr_results]
+                        # Default: only top-1 candidate selected
+                        selected = st.multiselect("Select candidates", options=candidate_options, default=[candidate_options[0]])
+
+                        # Dimension selection dropdown
+                        all_dims = extract_dimensions_from_jd(jd_input, n_dims=99)
+                        default_dims = all_dims[:8] if len(all_dims) >= 8 else all_dims
+                        dimensions = st.multiselect("Select dimensions", options=all_dims, default=default_dims)
+
+                        scoring_mode = st.selectbox("Scoring mode", options=["keyword", "embedding"], index=0)
+
+                        # Prepare candidate list
+                        selected_candidates = []
+                        for sel in selected:
+                            # sel format: "{rank}. {owner_name}" (or fallback to filename)
+                            label = sel.split('. ', 1)[1] if '. ' in sel else sel
+                            # Find resume by owner_name first, fallback to filename
+                            match = next((r for r in hr_results if (r['owner_name'] != 'Unknown' and r['owner_name'] == label) or r['candidate'] == label), None)
+                            if match:
+                                raw_text = next((raw for file, _, raw in resumes if file == match['candidate']), "")
+                                selected_candidates.append({"name": match['owner_name'] if match['owner_name'] != 'Unknown' else match['candidate'], "text": raw_text})
+                            else:
+                                st.warning(f"Resume text not found for {sel}")
+
+                        if selected_candidates and dimensions:
+
+                            embedding_model = None
+                            radar_range = [0, 100]
+                            if scoring_mode == "embedding":
+                                try:
+                                    embedding_model = load_sbert_model()
+                                    radar_range = [0, 100]  # Perbesar jika ingin, misal [0, 120] atau [0, 150]
+                                except Exception as e:
+                                    st.warning(f"Embedding model load failed, falling back to keyword mode: {e}")
+                                    embedding_model = None
+                            try:
+                                df_radar = build_radar_dataframe(selected_candidates, dimensions, embedding_model=embedding_model)
+                                from src.visualization import radar as radar_mod
+                                fig = radar_mod.plotly_radar_chart(df_radar, title="Top candidates", radial_range=radar_range)
+                                st.plotly_chart(fig, use_container_width=True)
+                            except Exception as e:
+                                st.error(f"Failed to build radar chart: {e}")
 
             if st.session_state.get("ai_advice"):
                 st.markdown(st.session_state["ai_advice"])
-
-    except Exception as e:
-        # 8. Error Handling
-        st.error(str(e))
-else:
-    if not resume_text:
-        st.info("Please paste or upload a resume to begin.")
+        else:
+            if not resume_text:
+                st.info("Please paste or upload a resume to begin.")

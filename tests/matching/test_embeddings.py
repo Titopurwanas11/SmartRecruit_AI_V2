@@ -11,6 +11,25 @@ def test_load_sbert_model():
     model = load_sbert_model()
     assert isinstance(model, SentenceTransformer)
 
+
+def test_load_sbert_model_uses_cpu_device(monkeypatch):
+    calls = []
+
+    class DummyModel:
+        pass
+
+    def fake_sentence_transformer(model_name, device=None):
+        calls.append((model_name, device))
+        return DummyModel()
+
+    monkeypatch.setattr("src.matching.embeddings.SentenceTransformer", fake_sentence_transformer)
+
+    model = load_sbert_model()
+
+    assert isinstance(model, DummyModel)
+    assert calls == [(config.SBERT_MODEL_NAME, "cpu")]
+
+
 def test_embed_text():
     """Test that embed_text returns a numpy array of the correct shape and type."""
     model = load_sbert_model()
